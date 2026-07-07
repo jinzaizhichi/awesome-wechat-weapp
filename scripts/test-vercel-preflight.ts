@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 type PreflightOutput = {
   strictDeploy?: boolean;
@@ -27,6 +30,7 @@ const envKeys = [
   "VERCEL_URL",
   "SITE_URL",
   "NEXT_PUBLIC_SITE_URL",
+  "VERCEL_LINK_DIR",
   "DATABASE_URL",
   "CRON_SECRET",
   "ADMIN_TOKEN",
@@ -52,6 +56,7 @@ async function runPreflight(extraEnv: Record<string, string | undefined> = {}, a
       cwd: process.cwd(),
       env: {
         ...env,
+        VERCEL_LINK_DIR: join(process.cwd(), ".vercel-missing-test-link"),
         ...extraEnv
       },
       stdio: ["ignore", "pipe", "pipe"]
@@ -104,6 +109,28 @@ assert.equal(strictOutput.checks?.find((check) => check.name === "vercel:token")
 assert.equal(strictOutput.checks?.find((check) => check.name === "vercel:production-url")?.status, "fail");
 assert.equal(strictOutput.checks?.find((check) => check.name === "env:SITE_URL")?.status, "fail");
 
+const repoLinkDir = mkdtempSync(join(tmpdir(), "vercel-repo-link-"));
+try {
+  writeFileSync(
+    join(repoLinkDir, "repo.json"),
+    JSON.stringify({
+      projects: [
+        {
+          id: "prj_test",
+          orgId: "team_test",
+          directory: "."
+        }
+      ]
+    })
+  );
+  const repoLinked = await runPreflight({ VERCEL_LINK_DIR: repoLinkDir }, ["https://miniprogram-radar.example.com"]);
+  assert.equal(repoLinked.status, 0, repoLinked.stderr);
+  const repoLinkedOutput = parseOutput(repoLinked.stdout);
+  assert.equal(repoLinkedOutput.checks?.find((check) => check.name === "vercel:project-link")?.status, "pass");
+} finally {
+  rmSync(repoLinkDir, { recursive: true, force: true });
+}
+
 const configured = await runPreflight(
   {
     EXPECT_VERCEL_DEPLOY: "1",
@@ -126,10 +153,11 @@ console.log(
   JSON.stringify(
     {
       checkedAt: new Date().toISOString(),
-      cases: 3,
+      cases: 4,
       assertions: [
         "baseline external warnings",
         "strict deploy external failures",
+        "repo.json project link detection",
         "configured non-interactive deploy state",
         "cli probe skipped unless explicitly requested",
         "next command guidance"

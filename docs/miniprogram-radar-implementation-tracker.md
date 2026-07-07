@@ -6,9 +6,9 @@
 
 ## 1. 当前结论
 
-当前仓库已经具备本地 MVP 骨架：Next.js 产品页面、资源 API、规则型 AI 兜底、Doctor、Weekly、Admin、Cron 入口、Drizzle schema、Vercel 配置和验证脚本均已落地。本地校验与生产构建已通过。
+当前仓库已经具备可验证的 Preview MVP：Next.js 产品页面、资源 API、规则型 AI 兜底、Doctor、Weekly、Admin、Cron 入口、Drizzle schema、Vercel 配置和验证脚本均已落地。本地校验、生产构建和 Vercel Preview 验证已通过。
 
-尚未完成的关键事项是外部生产环境：Vercel Production URL、线上 Postgres、Cron Secret、Admin Token、GitHub Token、Upstash Redis、Vercel Blob 和可选 OpenAI Key 还需要在真实环境配置并验证。
+尚未完成的关键事项是外部生产环境：feature 分支 PR 合并到 `main` 后，需要完成 Vercel Production 部署，并配置线上 Postgres、Cron Secret、Admin Token、GitHub Token、Upstash Redis、Vercel Blob 和可选 OpenAI Key 后做真实环境验证。
 
 ## 2. 进度总览
 
@@ -16,7 +16,8 @@
 | --- | --- | --- | --- |
 | P0 文档收敛 | 已完成 | 核心文档入口已收敛到产品方案、实施总方案、Vercel 生产方案和本追踪表；重复方案文档已删除；`npm run generate:check`、`npm run mvp-check:test` 和 `npm run deploy:check` 通过 | 后续只维护四份核心文档 |
 | P1 本地 MVP | 已完成 | `npm run check`、`npm run build` 通过 | 保持每次关键变更后复跑 |
-| P2 Vercel 静态部署 | 未开始 | 尚无 Production URL | 在 Vercel 导入 GitHub 仓库并部署 |
+| P2 Vercel Preview 部署 | 已完成 | Preview URL `https://wechat-miniapp-radar-git-feature-wechat-miniapp-radar-justjavac.vercel.app` 已 Ready；`npm run deployment:verify -- <preview-url>`、`npm run mvp:check -- <preview-url>` 通过 | 创建 PR，人工确认 Preview 后再合并 |
+| P2.1 Vercel Production 部署 | 待合并 | Production 曾因 `main` 未包含 Next.js app 而失败；当前 feature 分支验证通过 | PR 验证通过后合并到 `main`，再触发 Production 部署 |
 | P3 Postgres 主库 | 未开始 | `DATABASE_URL` 未配置 | 选择 Neon 或 Supabase，执行迁移和导入 |
 | P4 采集与评分 Cron | 待生产配置 | Cron 代码和鉴权测试已具备 | 配置 `CRON_SECRET` 和 `GITHUB_TOKEN`，做 dry-run |
 | P5 Redis 缓存/限流/任务锁 | 待生产配置 | 本地测试覆盖降级、锁冲突和失败兜底 | 创建 Upstash Redis 并验证 |
@@ -37,7 +38,7 @@
 
 | ID | 问题 | 影响 | 状态 | 处理方案 |
 | --- | --- | --- | --- | --- |
-| I-001 | 尚无 Vercel Production URL | 无法完成线上验收 | 打开 | 创建 Vercel 项目后记录 URL |
+| I-001 | Vercel Production 尚未成功部署 | 无法完成生产验收 | 打开 | feature 分支 Preview 验证通过后创建 PR，人工确认后合并到 `main` |
 | I-002 | `DATABASE_URL` 未配置 | 线上只能使用静态 JSON 降级 | 打开 | 默认优先 Neon Postgres；需要 Auth 时选 Supabase |
 | I-003 | `CRON_SECRET` 未配置 | 生产 Cron 不能授权运行 | 打开 | 在 Vercel 环境变量配置后执行 dry-run |
 | I-004 | `ADMIN_TOKEN` 未配置 | Admin readiness 只能验证未授权保护 | 打开 | 配置后执行授权 readiness 验证 |
@@ -67,6 +68,9 @@
 | 2026-07-07 | 文档结构检查 | `npm run deploy:check` | 通过 | 已自动检查核心文档、重复方案文档、索引链接和追踪表结构 |
 | 2026-07-07 | Admin 端点目录检查 | `npm run deploy:check` | 通过 | 已自动检查 Admin 页面包含 readiness 和维护 API |
 | 2026-07-07 | 实施追踪 CLI | `npm run tracker:test` | 通过 | `miniprogram-radar tracker` 可输出进度、问题、风险和验证记录 |
+| 2026-07-07 | Vercel Preview 部署校验 | `npm run deployment:verify -- https://wechat-miniapp-radar-git-feature-wechat-miniapp-radar-justjavac.vercel.app` | 通过 | 27 pass / 7 warn / 0 fail；warning 为生产密钥和外部服务未配置 |
+| 2026-07-07 | Vercel Preview MVP 校验 | `npm run mvp:check -- https://wechat-miniapp-radar-git-feature-wechat-miniapp-radar-justjavac.vercel.app` | 通过 | 49 pass / 10 warn / 0 fail；真实 AI 仍暂缓 |
+| 2026-07-07 | Vercel Preview 预检 | `npm run vercel:preflight -- https://wechat-miniapp-radar-git-feature-wechat-miniapp-radar-justjavac.vercel.app` | 通过 | 10 pass / 11 warn / 0 fail；warning 不阻断 Preview |
 
 ## 6. 下一步执行清单
 
@@ -79,10 +83,17 @@
 
 ### 6.2 生产部署
 
-1. 在 Vercel 导入 GitHub 仓库。
-2. 获取 Production URL。
-3. 配置 `SITE_URL` 和 `NEXT_PUBLIC_SITE_URL`。
-4. 执行：
+1. 创建 `feature/wechat-miniapp-radar` 到 `main` 的 PR。
+2. 人工确认 Preview URL：
+
+```text
+https://wechat-miniapp-radar-git-feature-wechat-miniapp-radar-justjavac.vercel.app
+```
+
+3. Preview 确认无误后合并到 `main`。
+4. 等待 Vercel Production 部署成功并获取 Production URL。
+5. 配置 `SITE_URL` 和 `NEXT_PUBLIC_SITE_URL`。
+6. 执行：
 
 ```bash
 npm run vercel:preflight -- <production-url>

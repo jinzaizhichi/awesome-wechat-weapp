@@ -1,5 +1,8 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 
 type BootstrapOutput = {
   mode?: string;
@@ -46,6 +49,7 @@ const envKeys = [
   "VERCEL_TOKEN",
   "VERCEL_PROJECT_ID",
   "VERCEL_ORG_ID",
+  "VERCEL_LINK_DIR",
   "VERIFY_BLOB_WRITE"
 ];
 
@@ -65,6 +69,7 @@ async function runBootstrap(args: string[], extraEnv: Record<string, string | un
       cwd: process.cwd(),
       env: {
         ...env,
+        VERCEL_LINK_DIR: join(process.cwd(), ".vercel-missing-test-link"),
         ...extraEnv
       },
       stdio: ["ignore", "pipe", "pipe"]
@@ -214,6 +219,32 @@ assert.equal(strictVercelDeployConfigured.status, 0, strictVercelDeployConfigure
 const strictVercelDeployConfiguredOutput = parseOutput(strictVercelDeployConfigured.stdout);
 assert.deepEqual(strictVercelDeployConfiguredOutput.blockingIssues, [], "strict Vercel deploy should pass when token and project link are configured");
 
+const repoLinkDir = mkdtempSync(join(tmpdir(), "vercel-bootstrap-link-"));
+try {
+  writeFileSync(
+    join(repoLinkDir, "repo.json"),
+    JSON.stringify({
+      projects: [
+        {
+          id: "prj_test",
+          orgId: "team_test",
+          directory: "."
+        }
+      ]
+    })
+  );
+  const strictVercelDeployRepoLinked = await runBootstrap(["https://miniprogram-radar.example.com", "expect-vercel-deploy"], {
+    VERCEL_TOKEN: "test-vercel-token",
+    VERCEL_LINK_DIR: repoLinkDir,
+    SITE_URL: "https://miniprogram-radar.example.com"
+  });
+  assert.equal(strictVercelDeployRepoLinked.status, 0, strictVercelDeployRepoLinked.stderr);
+  const strictVercelDeployRepoLinkedOutput = parseOutput(strictVercelDeployRepoLinked.stdout);
+  assert.deepEqual(strictVercelDeployRepoLinkedOutput.blockingIssues, [], "strict Vercel deploy should pass with Vercel CLI repo.json link");
+} finally {
+  rmSync(repoLinkDir, { recursive: true, force: true });
+}
+
 const executeStopsAfterPreflightFailure = await runBootstrap(["https://miniprogram-radar.example.com", "execute", "expect-vercel-deploy"]);
 assert.equal(executeStopsAfterPreflightFailure.status, 1, "execute mode should fail when strict Vercel preflight fails");
 const executeStopsAfterPreflightFailureOutput = parseOutput(executeStopsAfterPreflightFailure.stdout);
@@ -226,7 +257,7 @@ console.log(
   JSON.stringify(
     {
       checkedAt: new Date().toISOString(),
-      cases: 16,
+      cases: 17,
       assertions: [
         "production bootstrap plan with URL",
         "missing production URL failure",
@@ -244,6 +275,7 @@ console.log(
         "strict site URL configured preflight",
         "strict Vercel deploy expectation",
         "strict Vercel deploy configured preflight",
+        "strict Vercel deploy repo.json preflight",
         "execute mode stops after failed preflight"
       ]
     },

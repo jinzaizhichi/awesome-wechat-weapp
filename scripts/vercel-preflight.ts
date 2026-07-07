@@ -1,6 +1,7 @@
 import { spawnSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 
 type CheckStatus = "pass" | "warn" | "fail";
 
@@ -11,6 +12,7 @@ interface CheckResult {
 }
 
 const strictDeploy = process.env.EXPECT_VERCEL_DEPLOY === "1";
+const vercelLinkDir = process.env.VERCEL_LINK_DIR || ".vercel";
 const checks: CheckResult[] = [];
 
 function record(name: string, status: CheckStatus, detail: string) {
@@ -70,12 +72,28 @@ async function checkProjectLink() {
     projectId?: string;
     orgId?: string;
   };
+  type RepoLink = {
+    projects?: Array<{
+      id?: string;
+      orgId?: string;
+      directory?: string;
+    }>;
+  };
 
-  const fileLink = await readJson<ProjectLink>(".vercel/project.json");
+  const projectLinkPath = join(vercelLinkDir, "project.json");
+  const repoLinkPath = join(vercelLinkDir, "repo.json");
+  const fileLink = await readJson<ProjectLink>(projectLinkPath);
+  const repoLink = await readJson<RepoLink>(repoLinkPath);
+  const currentRepoProject = repoLink?.projects?.find((project) => project.directory === "." || project.directory === undefined);
   const envLink = process.env.VERCEL_PROJECT_ID && process.env.VERCEL_ORG_ID;
 
   if (fileLink?.projectId && fileLink.orgId) {
-    pass("vercel:project-link", ".vercel/project.json contains projectId and orgId.");
+    pass("vercel:project-link", `${projectLinkPath} contains projectId and orgId.`);
+    return;
+  }
+
+  if (currentRepoProject?.id && currentRepoProject.orgId) {
+    pass("vercel:project-link", `${repoLinkPath} contains project id and orgId.`);
     return;
   }
 

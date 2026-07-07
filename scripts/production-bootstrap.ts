@@ -1,5 +1,6 @@
 import { spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 
 type StepStatus = "ready" | "skipped" | "pass" | "fail";
 
@@ -33,6 +34,7 @@ const expectSiteUrl = hasFlag("expect-site-url") || process.env.EXPECT_SITE_URL 
 const expectVercelDeploy = hasFlag("expect-vercel-deploy") || process.env.EXPECT_VERCEL_DEPLOY === "1";
 const verifyCronSecret = process.env.VERIFY_CRON_SECRET || process.env.CRON_SECRET || "";
 const verifyAdminToken = process.env.VERIFY_ADMIN_TOKEN || process.env.ADMIN_TOKEN || "";
+const vercelLinkDir = process.env.VERCEL_LINK_DIR || ".vercel";
 
 function readUrl() {
   const urlFlagIndex = process.argv.indexOf("--url");
@@ -71,7 +73,17 @@ function hasSiteUrlEnv() {
 }
 
 function hasVercelProjectLink() {
-  return existsSync(".vercel/project.json") || (hasEnv("VERCEL_PROJECT_ID") && hasEnv("VERCEL_ORG_ID"));
+  if (hasEnv("VERCEL_PROJECT_ID") && hasEnv("VERCEL_ORG_ID")) return true;
+  if (existsSync(join(vercelLinkDir, "project.json"))) return true;
+
+  try {
+    const repoLink = JSON.parse(readFileSync(join(vercelLinkDir, "repo.json"), "utf8")) as {
+      projects?: Array<{ id?: string; orgId?: string; directory?: string }>;
+    };
+    return Boolean(repoLink.projects?.some((project) => (project.directory === "." || project.directory === undefined) && project.id && project.orgId));
+  } catch {
+    return false;
+  }
 }
 
 addStep(
