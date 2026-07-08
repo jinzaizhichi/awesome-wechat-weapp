@@ -6,6 +6,10 @@ import { getResources } from "@/lib/resources";
 
 const originalEnv = {
   DATABASE_URL: process.env.DATABASE_URL,
+  OPENAI_API_KEY: process.env.OPENAI_API_KEY,
+  OPENAI_API_URL: process.env.OPENAI_API_URL,
+  OPENAI_MODEL: process.env.OPENAI_MODEL,
+  OPENAI_FALLBACK_MODEL: process.env.OPENAI_FALLBACK_MODEL,
   KV_REST_API_TOKEN: process.env.KV_REST_API_TOKEN,
   KV_REST_API_URL: process.env.KV_REST_API_URL,
   UPSTASH_REDIS_REST_TOKEN: process.env.UPSTASH_REDIS_REST_TOKEN,
@@ -48,8 +52,14 @@ const questions = [
   }
 ];
 
+const originalFetch = globalThis.fetch;
+
 try {
   setEnv("DATABASE_URL", undefined);
+  setEnv("OPENAI_API_KEY", undefined);
+  setEnv("OPENAI_API_URL", undefined);
+  setEnv("OPENAI_MODEL", undefined);
+  setEnv("OPENAI_FALLBACK_MODEL", undefined);
   setEnv("UPSTASH_REDIS_REST_TOKEN", undefined);
   setEnv("UPSTASH_REDIS_REST_URL", undefined);
   setEnv("KV_REST_API_TOKEN", undefined);
@@ -104,19 +114,151 @@ try {
     })
   );
   assert.equal(routeResponse.status, 200, "advisor route should return a validated answer");
-  const routeAnswer = (await routeResponse.json()) as ReturnType<typeof createAdvisorAnswer> & { cached?: boolean; persisted?: boolean };
+  const routeAnswer = (await routeResponse.json()) as ReturnType<typeof createAdvisorAnswer> & { cached?: boolean; persisted?: boolean; source?: string };
   const routeValidation = validateAdvisorAnswer(routeAnswer, resources);
   assert.equal(routeValidation.ok, true, routeValidation.errors.join("\n"));
   assert.ok(routeAnswer.fitConditions.length > 0, "advisor route should return fit conditions");
   assert.ok(routeAnswer.alternatives.length > 0, "advisor route should return alternatives");
   assert.ok(routeAnswer.validationChecklist.length > 0, "advisor route should return a validation checklist");
+  assert.equal(routeAnswer.source, "rules", "advisor route should use rules when AI is not configured");
+
+  setEnv("OPENAI_API_KEY", "test-openrouter-key");
+  setEnv("OPENAI_API_URL", "https://openrouter.ai/api/v1");
+  setEnv("OPENAI_MODEL", "test-primary-model");
+  setEnv("OPENAI_FALLBACK_MODEL", "test-fallback-model");
+
+  const draftAiAnswer = createAdvisorAnswer(questions[0].question, resources);
+  const modelAnswer = {
+    ...draftAiAnswer,
+    recommendation: `AI 增强建议：${draftAiAnswer.recommendation}`
+  };
+  let aiRequestCount = 0;
+  globalThis.fetch = async (input: string | URL | Request, init?: RequestInit) => {
+    aiRequestCount += 1;
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    assert.equal(url, "https://openrouter.ai/api/v1/chat/completions");
+    assert.equal(init?.method, "POST");
+    const headers = new Headers(init?.headers);
+    assert.equal(headers.get("authorization"), "Bearer test-openrouter-key");
+    const body = JSON.parse(String(init?.body)) as { model?: string; messages?: unknown[]; stream?: boolean };
+    assert.equal(body.model, "test-primary-model");
+    assert.equal(body.stream, false);
+    assert.ok(Array.isArray(body.messages) && body.messages.length === 2, "AI request should include prompt contract messages");
+    return new Response(
+      JSON.stringify({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify(modelAnswer)
+            }
+          }
+        ]
+      }),
+      {
+        status: 200,
+        headers: { "content-type": "application/json" }
+      }
+    );
+  };
+
+  const aiRouteResponse = await advisorRoute(
+    new Request("https://example.com/api/advisor", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-forwarded-for": "203.0.113.51"
+      },
+      body: JSON.stringify({ question: questions[0].question })
+    })
+  );
+  assert.equal(aiRouteResponse.status, 200, "advisor route should return a model-backed answer when AI is configured");
+  assert.equal(aiRouteResponse.headers.get("x-advisor-source"), "ai");
+  assert.equal(aiRouteResponse.headers.get("x-advisor-model"), "test-primary-model");
+  const aiRouteAnswer = (await aiRouteResponse.json()) as ReturnType<typeof createAdvisorAnswer> & { source?: string; model?: string | null; fallbackUsed?: boolean; fallbackReason?: string | null };
+  const aiRouteValidation = validateAdvisorAnswer(aiRouteAnswer, resources);
+  assert.equal(aiRouteValidation.ok, true, aiRouteValidation.errors.join("\n"));
+  assert.equal(aiRouteAnswer.source, "ai");
+  assert.equal(aiRouteAnswer.model, "test-primary-model");
+  assert.equal(aiRouteAnswer.fallbackUsed, false);
+  assert.equal(aiRouteAnswer.fallbackReason, null);
+  assert.match(aiRouteAnswer.recommendation, /^AI 增强建议：/);
+  assert.equal(aiRequestCount, 1, "advisor route should call the AI provider once for a valid primary response");
+  globalThis.fetch = originalFetch;
+
+  const fallbackModelAnswer = {
+    ...draftAiAnswer,
+    recommendation: `Fallback AI 建议：${draftAiAnswer.recommendation}`
+  };
+  const requestedModels: string[] = [];
+  globalThis.fetch = async (input: string | URL | Request, init?: RequestInit) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    assert.equal(url, "https://openrouter.ai/api/v1/chat/completions");
+    const body = JSON.parse(String(init?.body)) as { model?: string };
+    requestedModels.push(body.model ?? "");
+
+    if (body.model === "test-primary-model") {
+      return new Response(JSON.stringify({ error: { message: "primary unavailable" } }), {
+        status: 503,
+        headers: { "content-type": "application/json" }
+      });
+    }
+
+    return new Response(
+      JSON.stringify({
+        choices: [
+          {
+            message: {
+              content: JSON.stringify(fallbackModelAnswer)
+            }
+          }
+        ]
+      }),
+      {
+        status: 200,
+        headers: { "content-type": "application/json" }
+      }
+    );
+  };
+
+  const fallbackRouteResponse = await advisorRoute(
+    new Request("https://example.com/api/advisor", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "x-forwarded-for": "203.0.113.52"
+      },
+      body: JSON.stringify({ question: questions[0].question })
+    })
+  );
+  assert.equal(fallbackRouteResponse.status, 200, "advisor route should return a fallback model answer when primary fails");
+  assert.equal(fallbackRouteResponse.headers.get("x-advisor-source"), "ai");
+  assert.equal(fallbackRouteResponse.headers.get("x-advisor-model"), "test-fallback-model");
+  assert.equal(fallbackRouteResponse.headers.get("x-advisor-fallback"), "true");
+  const fallbackRouteAnswer = (await fallbackRouteResponse.json()) as ReturnType<typeof createAdvisorAnswer> & { source?: string; model?: string | null; fallbackUsed?: boolean; fallbackReason?: string | null };
+  const fallbackRouteValidation = validateAdvisorAnswer(fallbackRouteAnswer, resources);
+  assert.equal(fallbackRouteValidation.ok, true, fallbackRouteValidation.errors.join("\n"));
+  assert.equal(fallbackRouteAnswer.source, "ai");
+  assert.equal(fallbackRouteAnswer.model, "test-fallback-model");
+  assert.equal(fallbackRouteAnswer.fallbackUsed, true);
+  assert.equal(fallbackRouteAnswer.fallbackReason, null);
+  assert.match(fallbackRouteAnswer.recommendation, /^Fallback AI 建议：/);
+  assert.deepEqual(requestedModels, ["test-primary-model", "test-fallback-model"], "advisor route should try primary then fallback model");
+  globalThis.fetch = originalFetch;
 
   console.log(
     JSON.stringify(
       {
         checkedAt: new Date().toISOString(),
-        cases: results.length + 1,
-        assertions: ["advisor generation", "advisor decision structure", "advisor internal resource links", "advisor evidence validation", "advisor route validation"],
+        cases: results.length + 3,
+        assertions: [
+          "advisor generation",
+          "advisor decision structure",
+          "advisor internal resource links",
+          "advisor evidence validation",
+          "advisor route validation",
+          "advisor AI route validation",
+          "advisor AI fallback model"
+        ],
         results
       },
       null,
@@ -124,7 +266,12 @@ try {
     )
   );
 } finally {
+  if (typeof originalFetch !== "undefined") globalThis.fetch = originalFetch;
   setEnv("DATABASE_URL", originalEnv.DATABASE_URL);
+  setEnv("OPENAI_API_KEY", originalEnv.OPENAI_API_KEY);
+  setEnv("OPENAI_API_URL", originalEnv.OPENAI_API_URL);
+  setEnv("OPENAI_MODEL", originalEnv.OPENAI_MODEL);
+  setEnv("OPENAI_FALLBACK_MODEL", originalEnv.OPENAI_FALLBACK_MODEL);
   setEnv("KV_REST_API_TOKEN", originalEnv.KV_REST_API_TOKEN);
   setEnv("KV_REST_API_URL", originalEnv.KV_REST_API_URL);
   setEnv("UPSTASH_REDIS_REST_TOKEN", originalEnv.UPSTASH_REDIS_REST_TOKEN);

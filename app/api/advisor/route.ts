@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { createAdvisorAnswer } from "@/lib/advisor";
+import { createAdvisorAnswerWithAi } from "@/lib/ai-advisor";
+import { getAiConfig } from "@/lib/ai-config";
 import { createAdvisorCacheKey, getCachedAdvisorAnswer, setCachedAdvisorAnswer } from "@/lib/advisor-cache";
 import { persistAdvisorSession } from "@/lib/advisor-store";
 import { validateAdvisorAnswer } from "@/lib/ai-output-validation";
@@ -36,15 +37,18 @@ export async function POST(request: Request) {
   }
 
   const resources = await getResources();
-  const cacheKey = createAdvisorCacheKey(question, resources.length);
+  const aiConfig = getAiConfig();
+  const cacheVariant = aiConfig.configured ? `ai:${aiConfig.provider}:${aiConfig.apiUrl}:${aiConfig.model}:${aiConfig.fallbackModel}` : "rules";
+  const cacheKey = createAdvisorCacheKey(question, resources.length, cacheVariant);
   const cachedAnswer = await getCachedAdvisorAnswer(cacheKey);
 
   if (cachedAnswer && validateAdvisorAnswer(cachedAnswer, resources).ok) {
     return NextResponse.json(
-      { ...cachedAnswer, cached: true, persisted: false },
+      { ...cachedAnswer, source: aiConfig.configured ? "ai" : "rules", cached: true, persisted: false },
       {
         headers: {
           "x-advisor-cache": "hit",
+          "x-advisor-source": aiConfig.configured ? "ai" : "rules",
           "x-ratelimit-remaining": String(limit.remaining),
           "x-ratelimit-reset": String(limit.resetAt)
         }
@@ -52,7 +56,8 @@ export async function POST(request: Request) {
     );
   }
 
-  const answer = createAdvisorAnswer(question, resources);
+  const generated = await createAdvisorAnswerWithAi(question, resources);
+  const answer = generated.answer;
   const validation = validateAdvisorAnswer(answer, resources);
   if (!validation.ok) {
     return NextResponse.json(
@@ -64,14 +69,26 @@ export async function POST(request: Request) {
     );
   }
 
-  const cacheStored = await setCachedAdvisorAnswer(cacheKey, answer);
+  const cacheStored = generated.cacheable ? await setCachedAdvisorAnswer(cacheKey, answer) : false;
   const persisted = await persistAdvisorSession(answer).catch(() => false);
 
   return NextResponse.json(
-    { ...answer, cached: false, cacheStored, persisted },
+    {
+      ...answer,
+      source: generated.source,
+      model: generated.model,
+      fallbackUsed: generated.fallbackUsed,
+      fallbackReason: generated.fallbackReason,
+      cached: false,
+      cacheStored,
+      persisted
+    },
     {
       headers: {
         "x-advisor-cache": cacheStored ? "stored" : "skip",
+        "x-advisor-source": generated.source,
+        ...(generated.model ? { "x-advisor-model": generated.model } : {}),
+        ...(generated.fallbackUsed ? { "x-advisor-fallback": "true" } : {}),
         "x-ratelimit-remaining": String(limit.remaining),
         "x-ratelimit-reset": String(limit.resetAt)
       }

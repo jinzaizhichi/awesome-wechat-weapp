@@ -69,6 +69,8 @@ checks.push(checkFile("scripts/verify.ts", "cli:verify"));
 checks.push(checkFile("scripts/weekly-cli.ts", "cli:weekly"));
 checks.push(checkFile("lib/operation-log.ts", "operation-log-helper"));
 checks.push(checkFile("lib/task-lock.ts", "task-lock-helper"));
+checks.push(checkFile("lib/ai-client.ts", "ai-client-helper"));
+checks.push(checkFile("lib/ai-advisor.ts", "ai-advisor-helper"));
 checks.push(checkFile("lib/ai-prompts.ts", "ai-prompt-contract"));
 checks.push(checkFile("lib/production-readiness.ts", "production-readiness-helper"));
 checks.push(checkFile("components/quick-search.tsx", "quick-search-component"));

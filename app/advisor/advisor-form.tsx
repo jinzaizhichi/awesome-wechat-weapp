@@ -14,6 +14,11 @@ interface AdvisorResponse {
   alternatives: Array<{ resourceId: string; title: string; url: string; reason: string; status: string; riskLevel: string }>;
   validationChecklist: string[];
   evidence: Array<{ resourceId: string; title: string; url: string; type: string; label: string }>;
+  source?: "ai" | "rules";
+  model?: string | null;
+  fallbackUsed?: boolean;
+  fallbackReason?: string | null;
+  cached?: boolean;
 }
 
 export function AdvisorForm() {
@@ -73,8 +78,17 @@ export function AdvisorForm() {
         {answer ? (
           <div className="mt-4 space-y-5">
             <div>
-              <h3 className="text-sm font-semibold text-muted-foreground">推荐结论</h3>
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="text-sm font-semibold text-muted-foreground">推荐结论</h3>
+                <span className="rounded-full border border-border px-2 py-0.5 text-xs text-muted-foreground">
+                  {answer.source === "ai" ? "AI 生成" : "规则兜底"}
+                  {answer.cached ? " · 缓存" : ""}
+                  {answer.fallbackUsed ? " · fallback" : ""}
+                </span>
+              </div>
               <p className="mt-1 text-lg font-bold">{answer.recommendation}</p>
+              {answer.model ? <p className="mt-1 text-xs text-muted-foreground">Model: {answer.model}</p> : null}
+              {answer.fallbackReason ? <p className="mt-1 text-xs text-muted-foreground">Fallback: {answer.fallbackReason}</p> : null}
             </div>
             <div>
               <h3 className="text-sm font-semibold text-muted-foreground">理由</h3>
@@ -147,7 +161,7 @@ export function AdvisorForm() {
             </div>
           </div>
         ) : (
-          <p className="mt-4 text-sm leading-6 text-muted-foreground">当前是规则生成的 Advisor 原型。后续接入模型 API 后，会基于本地资源库、评分和证据生成更完整的自然语言建议。</p>
+          <p className="mt-4 text-sm leading-6 text-muted-foreground">输入一个小程序技术选型问题，Advisor 会基于资源库、评分和证据生成建议。</p>
         )}
       </section>
     </div>

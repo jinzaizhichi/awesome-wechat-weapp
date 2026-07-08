@@ -9,9 +9,9 @@ function normalizeQuestion(question: string) {
   return question.trim().replace(/\s+/g, " ").toLowerCase();
 }
 
-export function createAdvisorCacheKey(question: string, resourceCount: number) {
+export function createAdvisorCacheKey(question: string, resourceCount: number, variant = "rules") {
   const digest = createHash("sha256")
-    .update(`${ADVISOR_CACHE_SCHEMA_VERSION}:${normalizeQuestion(question)}:${resourceCount}`)
+    .update(`${ADVISOR_CACHE_SCHEMA_VERSION}:${variant}:${normalizeQuestion(question)}:${resourceCount}`)
     .digest("hex");
   return `advisor:${ADVISOR_CACHE_SCHEMA_VERSION}:${digest}`;
 }
