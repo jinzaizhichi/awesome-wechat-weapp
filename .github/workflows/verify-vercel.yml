@@ -96,6 +96,8 @@ jobs:
           NEXT_PUBLIC_SITE_URL: ${{ vars.NEXT_PUBLIC_SITE_URL }}
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OPENAI_API_URL: ${{ vars.OPENAI_API_URL }}
+          OPENAI_MODEL: ${{ vars.OPENAI_MODEL }}
+          OPENAI_FALLBACK_MODEL: ${{ vars.OPENAI_FALLBACK_MODEL }}
           VERIFY_CRON_SECRET: ${{ secrets.CRON_SECRET }}
           VERIFY_ADMIN_TOKEN: ${{ secrets.ADMIN_TOKEN }}
           GITHUB_TOKEN: ${{ secrets.RADAR_GITHUB_TOKEN || github.token }}

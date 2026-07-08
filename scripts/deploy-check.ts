@@ -89,6 +89,8 @@ const requiredEnvKeys = [
   "NEXT_PUBLIC_SITE_URL",
   "OPENAI_API_KEY",
   "OPENAI_API_URL",
+  "OPENAI_MODEL",
+  "OPENAI_FALLBACK_MODEL",
   "GITHUB_TOKEN",
   "CRON_SECRET",
   "ADMIN_TOKEN",
@@ -218,6 +220,8 @@ const requiredVerifyWorkflowCommands = [
   "NEXT_PUBLIC_SITE_URL",
   "OPENAI_API_KEY",
   "OPENAI_API_URL",
+  "OPENAI_MODEL",
+  "OPENAI_FALLBACK_MODEL",
   "RADAR_GITHUB_TOKEN",
   "GITHUB_TOKEN",
   "BLOB_READ_WRITE_TOKEN",
@@ -502,6 +506,8 @@ checks.push(checkEnv("ADMIN_TOKEN", false));
 checks.push(checkEnv("GITHUB_TOKEN", false));
 checks.push(checkEnv("OPENAI_API_KEY", false));
 checks.push(checkEnv("OPENAI_API_URL", false));
+checks.push(checkEnv("OPENAI_MODEL", false));
+checks.push(checkEnv("OPENAI_FALLBACK_MODEL", false));
 checks.push(checkEnv("BLOB_READ_WRITE_TOKEN", false));
 checks.push(checkRedisEnv(false));
 checks.push(checkEnv("OPERATION_LOG_RETENTION_DAYS", false));

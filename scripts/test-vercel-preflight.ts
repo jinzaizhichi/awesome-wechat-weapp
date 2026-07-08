@@ -41,7 +41,9 @@ const envKeys = [
   "KV_REST_API_URL",
   "KV_REST_API_TOKEN",
   "OPENAI_API_KEY",
-  "OPENAI_API_URL"
+  "OPENAI_API_URL",
+  "OPENAI_MODEL",
+  "OPENAI_FALLBACK_MODEL"
 ];
 
 function parseOutput(stdout: string): PreflightOutput {

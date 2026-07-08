@@ -106,9 +106,9 @@ export function buildProductionReadiness(health: HealthCheck): ProductionReadine
       title: "真实 AI",
       status: health.integrations.openai ? "ready" : "optional",
       detail: health.integrations.openai
-        ? `OPENAI_API_KEY 已配置，AI Provider 为 ${describeAiProvider(health.integrations.ai.provider)}。`
+        ? `OPENAI_API_KEY 已配置，AI Provider 为 ${describeAiProvider(health.integrations.ai.provider)}，主模型 ${health.integrations.ai.model}，备用模型 ${health.integrations.ai.fallbackModel}。`
         : "真实 AI 暂未启用，当前使用规则结果和 prompt contract。",
-      action: `用户确认启用后，只在服务端环境变量中配置 OPENAI_API_KEY；如使用 OpenRouter，同时配置 OPENAI_API_URL=${health.integrations.ai.provider === "openrouter" ? health.integrations.ai.apiUrl : "https://openrouter.ai/api/v1"}。`,
+      action: `用户确认启用后，只在服务端环境变量中配置 OPENAI_API_KEY；如使用 OpenRouter，同时配置 OPENAI_API_URL=${health.integrations.ai.provider === "openrouter" ? health.integrations.ai.apiUrl : "https://openrouter.ai/api/v1"}、OPENAI_MODEL 和 OPENAI_FALLBACK_MODEL。`,
       command: "EXPECT_OPENAI=1 npm run mvp:check -- <production-url>"
     })
   ];

@@ -192,6 +192,8 @@ const ai = getAiConfig();
 if (ai.configured) {
   pass("env:OPENAI_API_KEY", `OPENAI_API_KEY is configured for real AI via ${describeAiProvider(ai.provider)}.`);
   pass("env:OPENAI_API_URL", `AI endpoint is ${ai.apiUrl}.`);
+  pass("env:OPENAI_MODEL", `Primary AI model is ${ai.model}.`);
+  pass("env:OPENAI_FALLBACK_MODEL", `Fallback AI model is ${ai.fallbackModel}.`);
 } else {
   warnOrFail(
     "env:OPENAI_API_KEY",

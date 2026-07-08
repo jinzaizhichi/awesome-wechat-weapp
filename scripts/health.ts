@@ -49,7 +49,7 @@ function renderHealth(health: HealthCheck) {
     "",
     "## 集成",
     "",
-    `- AI：${status(health.integrations.ai.configured)}（${describeAiProvider(health.integrations.ai.provider)}，${health.integrations.ai.apiUrl}）`,
+    `- AI：${status(health.integrations.ai.configured)}（${describeAiProvider(health.integrations.ai.provider)}，${health.integrations.ai.apiUrl}，model ${health.integrations.ai.model}，fallback ${health.integrations.ai.fallbackModel}）`,
     `- GitHub：${status(health.integrations.github)}`,
     `- Cron Secret：${status(health.integrations.cronSecret)}`,
     `- Admin Token：${status(health.integrations.adminToken)}`,

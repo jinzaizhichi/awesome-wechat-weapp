@@ -262,7 +262,7 @@ const healthJsonPayload = JSON.parse(await readFile(healthJsonOutputFile, "utf8"
   ok?: boolean;
   resources?: { count?: number };
   snapshots?: { aiSummaries?: { count?: number }; radarScores?: { count?: number }; weekly?: { historyCount?: number } };
-  integrations?: { openai?: boolean; ai?: { provider?: string } };
+  integrations?: { openai?: boolean; ai?: { provider?: string; model?: string; fallbackModel?: string } };
 };
 assert.equal(healthJsonPayload.ok, true);
 assert.ok((healthJsonPayload.resources?.count ?? 0) > 0, "health json should include resource count");
@@ -271,6 +271,8 @@ assert.ok((healthJsonPayload.snapshots?.radarScores?.count ?? 0) > 0, "health js
 assert.ok((healthJsonPayload.snapshots?.weekly?.historyCount ?? 0) > 0, "health json should include weekly history count");
 assert.equal(healthJsonPayload.integrations?.openai, false);
 assert.equal(healthJsonPayload.integrations?.ai?.provider, "openai");
+assert.equal(healthJsonPayload.integrations?.ai?.model, "nvidia/nemotron-3-ultra-550b-a55b:free");
+assert.equal(healthJsonPayload.integrations?.ai?.fallbackModel, "qwen/qwen3-next-80b-a3b-instruct:free");
 
 const importHelp = await execFileAsync(process.execPath, ["bin/miniprogram-radar.mjs", "import", "--help"]);
 assert.match(importHelp.stdout, /miniprogram-radar import/);

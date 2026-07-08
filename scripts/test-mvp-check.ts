@@ -33,7 +33,9 @@ const envKeys = [
   "KV_REST_API_URL",
   "KV_REST_API_TOKEN",
   "OPENAI_API_KEY",
-  "OPENAI_API_URL"
+  "OPENAI_API_URL",
+  "OPENAI_MODEL",
+  "OPENAI_FALLBACK_MODEL"
 ];
 
 function parseOutput(stdout: string): MvpCheckOutput {
@@ -113,12 +115,16 @@ assert.equal(strictOutput.checks?.find((check) => check.name === "env:OPENAI_API
 
 const openRouterConfigured = await runMvpCheck({
   OPENAI_API_KEY: "test-openrouter-key",
-  OPENAI_API_URL: "https://openrouter.ai/api/v1"
+  OPENAI_API_URL: "https://openrouter.ai/api/v1",
+  OPENAI_MODEL: "nvidia/nemotron-3-ultra-550b-a55b:free",
+  OPENAI_FALLBACK_MODEL: "qwen/qwen3-next-80b-a3b-instruct:free"
 });
 assert.equal(openRouterConfigured.status, 0, openRouterConfigured.stderr);
 const openRouterConfiguredOutput = parseOutput(openRouterConfigured.stdout);
 assert.equal(openRouterConfiguredOutput.checks?.find((check) => check.name === "env:OPENAI_API_KEY")?.status, "pass");
 assert.equal(openRouterConfiguredOutput.checks?.find((check) => check.name === "env:OPENAI_API_URL")?.status, "pass");
+assert.equal(openRouterConfiguredOutput.checks?.find((check) => check.name === "env:OPENAI_MODEL")?.status, "pass");
+assert.equal(openRouterConfiguredOutput.checks?.find((check) => check.name === "env:OPENAI_FALLBACK_MODEL")?.status, "pass");
 
 const strictSiteUrl = await runMvpCheck({ EXPECT_SITE_URL: "1" });
 assert.equal(strictSiteUrl.status, 1, "strict site URL expectation should fail without SITE_URL or NEXT_PUBLIC_SITE_URL");

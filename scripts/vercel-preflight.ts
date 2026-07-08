@@ -147,14 +147,16 @@ function checkDeploymentEnv() {
     "GITHUB_TOKEN",
     "BLOB_READ_WRITE_TOKEN",
     "OPENAI_API_KEY",
-    "OPENAI_API_URL"
+    "OPENAI_API_URL",
+    "OPENAI_MODEL",
+    "OPENAI_FALLBACK_MODEL"
   ];
 
   for (const name of optionalEnv) {
     if (process.env[name]) pass(`env:${name}`, `${name} is configured.`);
     else record(`env:${name}`, "warn", `${name} is not configured.`);
   }
-  if (ai.configured) pass("env:AI_PROVIDER", `${describeAiProvider(ai.provider)} endpoint is selected: ${ai.apiUrl}.`);
+  if (ai.configured) pass("env:AI_PROVIDER", `${describeAiProvider(ai.provider)} endpoint is selected: ${ai.apiUrl}; model=${ai.model}; fallback=${ai.fallbackModel}.`);
 
   if (hasUpstashRedis()) {
     pass("env:UPSTASH_REDIS", "Redis REST integration is configured.");

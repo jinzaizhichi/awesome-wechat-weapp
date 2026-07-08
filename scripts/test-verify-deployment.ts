@@ -84,6 +84,8 @@ const server = createServer(async (request, response) => {
           configured: false,
           apiKeyConfigured: false,
           apiUrl: "https://api.openai.com/v1",
+          model: "nvidia/nemotron-3-ultra-550b-a55b:free",
+          fallbackModel: "qwen/qwen3-next-80b-a3b-instruct:free",
           provider: "openai"
         },
         openai: false,
