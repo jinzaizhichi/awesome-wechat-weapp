@@ -18,7 +18,8 @@ interface ChatCompletionResponse {
   error?: unknown;
 }
 
-const DEFAULT_AI_TIMEOUT_MS = 20_000;
+const DEFAULT_AI_TIMEOUT_MS = 12_000;
+const DEFAULT_AI_TOTAL_TIMEOUT_MS = 18_000;
 const DEFAULT_AI_MAX_TOKENS = 1400;
 const OPENROUTER_JSON_RESPONSE_FORMAT_MODELS = new Set([
   "google/gemma-4-26b-a4b-it:free",
@@ -165,10 +166,12 @@ async function requestChatCompletion<T>({
 
 export async function createAiJsonCompletion<T>({
   messages,
-  timeoutMs = DEFAULT_AI_TIMEOUT_MS
+  timeoutMs = DEFAULT_AI_TIMEOUT_MS,
+  totalTimeoutMs = DEFAULT_AI_TOTAL_TIMEOUT_MS
 }: {
   messages: AiPromptMessage[];
   timeoutMs?: number;
+  totalTimeoutMs?: number;
 }): Promise<AiJsonCompletionResult<T>> {
   const config = getAiConfig();
   if (!config.configured) {
@@ -183,14 +186,21 @@ export async function createAiJsonCompletion<T>({
 
   const models = Array.from(new Set([config.model, config.fallbackModel].filter(Boolean)));
   const errors: string[] = [];
+  const startedAt = Date.now();
 
   for (const model of models) {
+    const remainingTimeoutMs = Math.max(0, totalTimeoutMs - (Date.now() - startedAt));
+    if (remainingTimeoutMs <= 0) {
+      errors.push("AI total timeout budget was exhausted.");
+      break;
+    }
+
     try {
       const value = await requestChatCompletion<T>({
         config,
         model,
         messages,
-        timeoutMs
+        timeoutMs: Math.min(timeoutMs, remainingTimeoutMs)
       });
       return {
         ok: true,

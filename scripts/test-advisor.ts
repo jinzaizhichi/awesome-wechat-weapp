@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { POST as advisorRoute } from "@/app/api/advisor/route";
+import { createAiJsonCompletion } from "@/lib/ai-client";
 import { createAdvisorAnswer } from "@/lib/advisor";
 import { validateAdvisorAnswer } from "@/lib/ai-output-validation";
 import { getAiRuntimeStatus } from "@/lib/ai-runtime-status";
@@ -270,11 +271,43 @@ try {
   assert.deepEqual(requestedModels, ["test-primary-model", "qwen/qwen3-next-80b-a3b-instruct:free"], "advisor route should try primary then fallback model");
   globalThis.fetch = originalFetch;
 
+  setEnv("OPENAI_FALLBACK_MODEL", "test-slow-fallback-model");
+
+  const slowRequestedModels: string[] = [];
+  globalThis.fetch = async (input: string | URL | Request, init?: RequestInit) => {
+    const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+    assert.equal(url, "https://openrouter.ai/api/v1/chat/completions");
+    const body = JSON.parse(String(init?.body)) as { model?: string };
+    slowRequestedModels.push(body.model ?? "");
+
+    return new Promise<Response>((_resolve, reject) => {
+      const signal = init?.signal;
+      if (signal?.aborted) {
+        reject(new Error("aborted"));
+        return;
+      }
+      signal?.addEventListener("abort", () => reject(new Error("aborted")), { once: true });
+    });
+  };
+
+  const slowStartedAt = Date.now();
+  const slowCompletion = await createAiJsonCompletion<Record<string, unknown>>({
+    messages: [{ role: "user", content: "{\"task\":\"timeout_test\"}" }],
+    timeoutMs: 20,
+    totalTimeoutMs: 45
+  });
+  const slowElapsedMs = Date.now() - slowStartedAt;
+  assert.equal(slowCompletion.ok, false, "AI client should fail closed when all model attempts time out");
+  assert.equal(slowCompletion.fallbackUsed, true, "AI client should report fallback attempt availability after timeout failures");
+  assert.deepEqual(slowRequestedModels, ["test-primary-model", "test-slow-fallback-model"], "AI client should keep fallback attempts inside the total timeout budget");
+  assert.ok(slowElapsedMs < 500, `AI total timeout budget should finish quickly in tests, got ${slowElapsedMs}ms`);
+  globalThis.fetch = originalFetch;
+
   console.log(
     JSON.stringify(
       {
         checkedAt: new Date().toISOString(),
-        cases: results.length + 3,
+        cases: results.length + 4,
         assertions: [
           "advisor generation",
           "advisor decision structure",
@@ -283,7 +316,8 @@ try {
           "advisor evidence validation",
           "advisor route validation",
           "advisor AI route validation",
-          "advisor AI fallback model"
+          "advisor AI fallback model",
+          "advisor AI total timeout budget"
         ],
         results
       },
