@@ -10,7 +10,6 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "import:readme": "tsx scripts/import-readme.ts",
     "integrations:verify": "tsx scripts/verify-integrations.ts",
     "integrations-verify:test": "tsx scripts/test-verify-integrations.ts",
     "generate": "tsx scripts/generate.ts",
