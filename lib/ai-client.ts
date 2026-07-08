@@ -9,12 +9,15 @@ export interface AiJsonCompletionResult<T> {
   error: string | null;
 }
 
+interface ChatCompletionChoice {
+  finish_reason?: unknown;
+  message?: {
+    content?: unknown;
+  };
+}
+
 interface ChatCompletionResponse {
-  choices?: Array<{
-    message?: {
-      content?: unknown;
-    };
-  }>;
+  choices?: ChatCompletionChoice[];
   error?: unknown;
 }
 
@@ -140,6 +143,14 @@ function extractMessageContentText(content: unknown) {
   return "";
 }
 
+function describeEmptyChoice(choice: ChatCompletionChoice | undefined) {
+  const content = choice?.message?.content;
+  const contentType = Array.isArray(content) ? "array" : content === null ? "null" : typeof content;
+  const messageKeys = choice?.message && typeof choice.message === "object" ? Object.keys(choice.message).sort().join(",") || "none" : "none";
+  const finishReason = typeof choice?.finish_reason === "string" ? choice.finish_reason : "unknown";
+  return `contentType=${contentType}; messageKeys=${messageKeys}; finishReason=${finishReason}`;
+}
+
 async function requestChatCompletion<T>({
   config,
   model,
@@ -181,9 +192,10 @@ async function requestChatCompletion<T>({
     throw new Error(providerError ? `AI provider rejected ${model}: ${providerError}` : `AI provider rejected ${model} with HTTP ${response.status}.`);
   }
 
-  const content = extractMessageContentText(payload?.choices?.[0]?.message?.content);
+  const choice = payload?.choices?.[0];
+  const content = extractMessageContentText(choice?.message?.content);
   if (content.trim().length === 0) {
-    throw new Error(`AI provider returned an empty response for ${model}.`);
+    throw new Error(`AI provider returned an empty response for ${model}. ${describeEmptyChoice(choice)}`);
   }
 
   return parseJsonObject<T>(content);
